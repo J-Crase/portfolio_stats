@@ -10,7 +10,7 @@ pd.options.plotting.backend = "plotly"
 
 
 #calls list of all coins and caches them
-
+@st.cache(show_spinner=False)
 def API_coins():
     ph_all_CCs = cg.get_coins_list()
     return(ph_all_CCs)
@@ -24,8 +24,9 @@ st.title("Portfolio Tracker")
 raw_data = st.file_uploader('Upload your transactions from EasyCrypto', type=['csv'])
 if raw_data is not None:
     raw_df = pd.read_csv(raw_data)
-    cleaned_df = raw_df.drop(columns=['Order','Type','Address','Memo'])
-try:
+    raw_df = raw_df.drop(columns=['Order','Type','Address','Memo'])
+    cleaned_df = raw_df
+    graph_df = raw_df.copy()
     if st.sidebar.checkbox('Show transaction history'):
         # pulls exchange rate validating CC vs list
         empty_list = []
@@ -35,35 +36,34 @@ try:
             id = CC['id']
 
             # cached function to pull "X" coin from API
-            
+            @st.cache(show_spinner=False)
             def coin_rate():
                 ph_CCex_dict = cg.get_price(ids=id, vs_currencies='nzd')
                 return (ph_CCex_dict)
             CCex_dict = coin_rate()
             CCex = list(list(CCex_dict.values())[0].values())[0]
             empty_list.append(CCex)
-
         cleaned_df['Purchase Rate'] = cleaned_df['NZD']/cleaned_df['Amount']
         cleaned_df = cleaned_df.join(pd.DataFrame({'Current Rate': empty_list}))
         cleaned_df['Current Value'] = cleaned_df['Current Rate'] * cleaned_df['Amount']
         cleaned_df['Profit'] = cleaned_df['Current Value'] - cleaned_df['NZD']
         cleaned_df['%Profit'] = cleaned_df['Profit'] / cleaned_df['NZD'] * 100
-        stats = {'Input': cleaned_df['NZD'].sum(),'Profit': cleaned_df['Profit'].sum}
-        invested = cleaned_df['NZD'].sum()
-        profit = round(cleaned_df['Profit'].sum(), 2)
-        balance = input + profit
-        per_prof = round(cleaned_df['Profit'].sum()/cleaned_df['NZD'].sum()*100, 2)
+
+        invested = 'Invested (NZD): $' + str(cleaned_df['NZD'].sum())
+        profit = 'Profit (NZD): $' + str(round(cleaned_df['Profit'].sum(),2))
+        balance = 'Balance (NZD): $' + str(round(cleaned_df['Current Value'].sum(),2))
+        per_prof = 'Profit: ' + str(round(cleaned_df['Profit'].sum()/cleaned_df['NZD'].sum()*100,2)) + '%'
         st.write(cleaned_df)
-        st.write('Invested (NZD): ' + str(invested))
-        st.write('Profit (NZD): ' + str(profit))
-        st.write('Balance (NZD): ' + str(balance))
-        st.write('% Profit: ' + str(per_prof))
+        st.write(invested)
+        st.write(profit)
+        st.write(balance)
+        st.write(per_prof)
 
     if st.sidebar.checkbox('Show graphic history'):
         sdate = st.sidebar.date_input('start date', datetime.date(2021, 6, 16))
         edate = st.sidebar.date_input('end date', datetime.date.today())
 
-        ownedCCtype = cleaned_df['Coin'].drop_duplicates()
+        ownedCCtype = graph_df['Coin'].drop_duplicates()
 
         adjsdate = sdate
         fsdate = adjsdate.strftime('%d/%m/%Y')
@@ -82,7 +82,7 @@ try:
             id = CC['id']
 
             #look at creating function
-            
+            @st.cache(show_spinner=False)
             def coin_hist():
                 ph_rhist_dict = cg.get_coin_market_chart_range_by_id(id=id, vs_currency='nzd', from_timestamp=st_ts,
                                                               to_timestamp=ed_ts)
@@ -103,7 +103,7 @@ try:
 
         # splitting my data into info per crypto type and matching the dates to the historical data
         ls_ownedCCtype = ownedCCtype.tolist()
-        crypto_trimmed_df = cleaned_df.drop(columns=['Amount'])
+        crypto_trimmed_df = graph_df.drop(columns=['Amount'])
         crypto_trimmed_df['Date'] = pd.to_datetime(crypto_trimmed_df['Date'], format='%Y-%m-%d %H:%M:%S').dt.strftime('%d-%m-%Y')
 
         last_df = history_df
@@ -148,6 +148,6 @@ try:
         if st.checkbox('%Profit graph'):
             fig2 = last_df_prof_perc.plot()
             st.plotly_chart(fig2)
-except:
-    st.error("Please ensure file is uploaded....")
+
+
 
