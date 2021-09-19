@@ -10,7 +10,7 @@ pd.options.plotting.backend = "plotly"
 
 
 #calls list of all coins and caches them
-@st.cache(show_spinner=False)
+
 def API_coins():
     ph_all_CCs = cg.get_coins_list()
     return(ph_all_CCs)
@@ -35,7 +35,7 @@ try:
             id = CC['id']
 
             # cached function to pull "X" coin from API
-            @st.cache(show_spinner=False)
+            
             def coin_rate():
                 ph_CCex_dict = cg.get_price(ids=id, vs_currencies='nzd')
                 return (ph_CCex_dict)
@@ -49,13 +49,15 @@ try:
         cleaned_df['Profit'] = cleaned_df['Current Value'] - cleaned_df['NZD']
         cleaned_df['%Profit'] = cleaned_df['Profit'] / cleaned_df['NZD'] * 100
         stats = {'Input': cleaned_df['NZD'].sum(),'Profit': cleaned_df['Profit'].sum}
-        input = 'Input: ' + str(cleaned_df['NZD'].sum())
-        profit = 'Profit: ' + str(cleaned_df['Profit'].sum())
-        per_prof = '%Profit: ' + str(cleaned_df['Profit'].sum()/cleaned_df['NZD'].sum()*100)
+        invested = cleaned_df['NZD'].sum()
+        profit = round(cleaned_df['Profit'].sum(), 2)
+        balance = input + profit
+        per_prof = round(cleaned_df['Profit'].sum()/cleaned_df['NZD'].sum()*100, 2)
         st.write(cleaned_df)
-        st.write(input)
-        st.write(profit)
-        st.write(per_prof)
+        st.write('Invested (NZD): ' + str(invested))
+        st.write('Profit (NZD): ' + str(profit))
+        st.write('Balance (NZD): ' + str(balance))
+        st.write('% Profit: ' + str(per_prof))
 
     if st.sidebar.checkbox('Show graphic history'):
         sdate = st.sidebar.date_input('start date', datetime.date(2021, 6, 16))
@@ -80,7 +82,7 @@ try:
             id = CC['id']
 
             #look at creating function
-            @st.cache(show_spinner=False)
+            
             def coin_hist():
                 ph_rhist_dict = cg.get_coin_market_chart_range_by_id(id=id, vs_currency='nzd', from_timestamp=st_ts,
                                                               to_timestamp=ed_ts)
@@ -147,5 +149,5 @@ try:
             fig2 = last_df_prof_perc.plot()
             st.plotly_chart(fig2)
 except:
-    st.error("Congratu-fucking-lations, upload a file you dick")
-    st.balloons()
+    st.error("Please ensure file is uploaded....")
+
