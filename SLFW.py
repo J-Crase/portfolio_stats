@@ -10,7 +10,7 @@ pd.options.plotting.backend = "plotly"
 
 
 #calls list of all coins and caches them
-@st.cache(show_spinner=False)
+
 def API_coins():
     ph_all_CCs = cg.get_coins_list()
     return(ph_all_CCs)
@@ -36,7 +36,7 @@ if raw_data is not None:
             id = CC['id']
 
             # cached function to pull "X" coin from API
-            @st.cache(show_spinner=False)
+            
             def coin_rate():
                 ph_CCex_dict = cg.get_price(ids=id, vs_currencies='nzd')
                 return (ph_CCex_dict)
@@ -82,7 +82,7 @@ if raw_data is not None:
             id = CC['id']
 
             #look at creating function
-            @st.cache(show_spinner=False)
+            
             def coin_hist():
                 ph_rhist_dict = cg.get_coin_market_chart_range_by_id(id=id, vs_currency='nzd', from_timestamp=st_ts,
                                                               to_timestamp=ed_ts)
