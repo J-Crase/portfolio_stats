@@ -4,9 +4,12 @@ import pandas as pd
 import datetime
 from pycoingecko import CoinGeckoAPI
 cg = CoinGeckoAPI()
-from datetime import date, timedelta
+from datetime import datetime, timedelta, date
 import dateutil.parser
 pd.options.plotting.backend = "plotly"
+from streamlit import caching
+import time
+import plotly.graph_objects as go
 
 
 #calls list of all coins and caches them
@@ -24,10 +27,52 @@ st.title("Portfolio Tracker")
 raw_data = st.file_uploader('Upload your transactions from EasyCrypto', type=['csv'])
 if raw_data is not None:
     raw_df = pd.read_csv(raw_data)
-    raw_df = raw_df.drop(columns=['Order','Type','Address','Memo'])
-    cleaned_df = raw_df
-    graph_df = raw_df.copy()
+    file_name = raw_data.name.lower()
+    if file_name[:6] == 'exodus':
+        raw_df = raw_df.drop(columns=['TYPE', 'FROMPORTFOLIO', 'TOPORTFOLIO', 'OUTAMOUNT', 'OUTCURRENCY', 'FEEAMOUNT', 'FEECURRENCY', 'TOADDRESS', 'OUTTXID', 'OUTTXURL', 'INTXID', 'INTXURL', 'ORDERID', 'PERSONALNOTE'])
+        raw_df = raw_df.rename(columns={'DATE': 'Date', 'INAMOUNT': 'Amount', 'INCURRENCY': 'Coin'})
+        #removal of fee entries
+        raw_df = raw_df.dropna()
+        raw_df = raw_df.reset_index(drop=True)
+
+        #parse dt and call api with dt and coin
+        price_ls = []
+        index_count = 0
+        for i, j in zip(raw_df['Date'], raw_df['Coin']):
+            parse_dt = datetime.strptime(i[:33], '%a %b %d %Y %H:%M:%S %Z%z')
+            raw_df['Date'][index_count] = parse_dt.strftime('%Y-%m-%d %H:%M:%S')
+            index_count += 1
+            unix_dt = time.mktime(parse_dt.timetuple())
+            CC_t = next(item for item in all_CCs if item["symbol"] == j.lower() and item["id"][:11] != 'binance-peg')
+            id_t = CC_t['id']
+
+
+            # look at creating function
+            @st.cache(show_spinner=False)
+            def coin_hist_t():
+                ph_rhist_dict_t = cg.get_coin_market_chart_range_by_id(id=id_t, vs_currency='nzd', from_timestamp=unix_dt,
+                                                                     to_timestamp=unix_dt + 3700)
+                return (ph_rhist_dict_t)
+
+
+            rhist_dict_t = coin_hist_t()
+            rhist_dict_p = rhist_dict_t['prices'][0][1]
+
+            price_ls.append(rhist_dict_p)
+        raw_df = raw_df.join(pd.DataFrame({'Purchase Rate': price_ls}))
+        raw_df['NZD'] = raw_df['Purchase Rate'] * raw_df['Amount']
+        raw_df = raw_df.drop(columns=['Purchase Rate'])
+        cleaned_df = raw_df
+        graph_df = raw_df.copy()
+
+    else:
+        raw_df = raw_df.drop(columns=['Order', 'Type', 'Address', 'Memo'])
+        cleaned_df = raw_df
+        graph_df = raw_df.copy()
+
+    st.sidebar.header('Functions')
     if st.sidebar.checkbox('Show transaction history'):
+        st.header('Portfolio Summary')
         # pulls exchange rate validating CC vs list
         empty_list = []
         #move outside and create function. Ref here
@@ -58,10 +103,20 @@ if raw_data is not None:
         st.write(profit)
         st.write(balance)
         st.write(per_prof)
-
+        if st.checkbox('Proportions'):
+            pie_labels = cleaned_df['Coin']
+            invest_values = cleaned_df['NZD']
+            prof_values = cleaned_df['Profit']
+            invest_fig = go.Figure(data=[go.Pie(labels=pie_labels, values=invest_values, hole=.8)])
+            prof_fig = go.Figure(data=[go.Pie(labels=pie_labels, values=prof_values, hole=.8)])
+            st.header('Invested')
+            st.plotly_chart(invest_fig)
+            st.header('Profit')
+            st.plotly_chart(prof_fig)
     if st.sidebar.checkbox('Show graphic history'):
-        sdate = st.sidebar.date_input('start date', datetime.date(2021, 6, 16))
-        edate = st.sidebar.date_input('end date', datetime.date.today())
+        st.header('Past Value')
+        sdate = st.sidebar.date_input('start date', date(2021, 6, 16))
+        edate = st.sidebar.date_input('end date', date.today())
 
         ownedCCtype = graph_df['Coin'].drop_duplicates()
 
@@ -130,7 +185,6 @@ if raw_data is not None:
 
         # calculating total profits
         last_df_prof["Total Profit"] = last_df_prof.sum(axis=1)
-        #st.write(last_df_prof)
         # segrigating porfit percentage and date into wide format df
         last_df_prof_perc = last_df[["Date"]].copy()
         last_df_prof_perc['Date'] = pd.to_datetime(last_df_prof_perc['Date'], dayfirst=True)
@@ -148,4 +202,9 @@ if raw_data is not None:
         if st.checkbox('%Profit graph'):
             fig2 = last_df_prof_perc.plot()
             st.plotly_chart(fig2)
+
+    if st.sidebar.button('Clear cache'):
+        caching.clear_cache()
+        #st.experimental_rerun()  seems to break file uploaded
+
 
